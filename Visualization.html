@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>Electric Vehicle Population in State of Washington</title>
+	<script src="https://d3js.org/d3.v6.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/gh/holtzy/D3-graph-gallery@master/LIB/d3.layout.cloud.js"></script>
+	<style>
+	body {
+		font-family: Arial, sans-serif;
+		background-color: #f3f3f3;
+		margin: 0;
+		padding: 20px;
+	}
+	
+	h1 {
+		text-align: center;
+		color: #333;
+	}
+	
+	#chart,
+	#wordcloud,
+	#line-chart {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		height: 650px;
+	}
+	
+	#chart {
+		background-color: #fff;
+		padding: 20px;
+		margin-bottom: 30px;
+		border-radius: 5px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+	}
+	
+	#wordcloud {
+		background-color: #fff;
+		padding: 20px;
+		margin-bottom: 30px;
+		border-radius: 5px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+	}
+	
+	#line-chart {
+		background-color: #fff;
+		padding: 20px;
+		border-radius: 5px;
+		box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+	}
+	
+	.tooltip {
+		position: absolute;
+		padding: 10px;
+		background-color: rgba(0, 0, 0, 0.7);
+		color: #fff;
+		border-radius: 5px;
+		pointer-events: none;
+	}
+	
+	.bar {
+		fill: steelblue;
+		transition: fill 0.2s;
+	}
+	
+	.bar:hover {
+		fill: #5DADE2;
+	}
+	
+	.line {
+		fill: none;
+		stroke: steelblue;
+		stroke-width: 2px;
+	}
+	
+	.dot {
+		fill: steelblue;
+		stroke: #fff;
+		stroke-width: 1px;
+	}
+	
+	.dot:hover {
+		fill: orange;
+	}
+	
+	#floating-page {
+		position: fixed;
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+		background-color: #fff;
+		border: 1px solid #ccc;
+		padding: 20px;
+		display: block;
+		z-index: 9999;
+		width: 1000px;
+		height: 650px;
+	}
+	</style>
+</head>
+
+<body>
+	<h1>Electric Vehicle Population in the State of Washington, 2008-2022</h1>
+	<div id="instructions">
+		<div>
+			<center>
+			<h2>Instructions:</h2>
+			<h3>Bar Chart</h3>
+			<p>Hover over the bars to see the number of electric cars for each year. Click on a bar to see the popularity of manufacturers for that year in the word cloud below.</p>
+			</center>
+		</div>
+		<div>
+			<center>
+			<h3>Word Cloud</h3>
+			<p>The word cloud shows the popularity of manufacturers for the selected year. Click on a manufacturer to see the detailed electric car count for that manufacturer over the years in the line chart below.</p>
+			</center>
+		</div>
+		<div>
+			<center>
+			<h3>Line Chart</h3>
+			<p>The line chart displays the electric car count for the selected manufacturer over the years. Hover over a dot on the line chart to explore the data.</p>
+			</center>
+		</div>
+	</div>
+	<div id="chart"></div>
+	<div id="wordcloud"></div>
+	<div id="line-chart"></div>
+	<div id="floating-page">
+		<div id="floating-page-content">
+			<center>
+				<h2>Introduction</h2>
+				<p>The Electric Vehicle Population in the State of Washington visualization presents a comprehensive overview of the growth and trends of electric vehicles (EVs) in Washington from 2008 to 2022, with a predicted count for 2023. </P>
+				<p>This interactive visualization incorporates multiple visual elements, including a bar chart, a word cloud, and a line chart, to provide insights into the increasing adoption of EVs and the key players in the market. </P>
+				<p>The bar chart showcases the annual EV counts, highlighting the predicted count for 2023. The word cloud offers a visual representation of EV manufacturers, with font size indicating their market presence. Finally, the line chart enables a detailed exploration of EV counts over time for specific manufacturers. </P> <img src="https://convertusgroupprod-com.cdn-convertus.com/uploads/sites/3/2021/11/Asset-1.png">
+				<br>
+				<button id="close-button">Close</button>
+			</center>
+		</div>
+	</div>
+	<script>
+	// Load data from the CSV file
+	d3.csv("EVData.csv").then(function(data) {
+		// Group the data by ModelYear and count the number of cars for each year
+		var counts = Array.from(d3.group(data, d => d.ModelYear), ([key, value]) => ({
+			year: key,
+			count: value.length
+		})).sort((a, b) => a.year - b.year);
+		// Set up the dimensions of the chart
+		var margin = {
+				top: 20,
+				right: 20,
+				bottom: 30,
+				left: 100
+			},
+			width = 1000 - margin.left - margin.right,
+			height = 650 - margin.top - margin.bottom;
+		// Calculate the growth rate between the last two years
+		var lastYear = counts[counts.length - 1].year;
+		var secondLastYear = counts[counts.length - 2].year;
+		var lastCount = counts[counts.length - 1].count;
+		var secondLastCount = counts[counts.length - 2].count;
+		var growthRate = (lastCount - secondLastCount) / (lastYear - secondLastYear);
+		// Add a new object for the year 2023 with a predicted count
+		var predictedCount = lastCount + (growthRate * (2023 - lastYear));
+		counts.push({
+			year: 2023,
+			count: predictedCount
+		});
+		// Create a scale for the x-axis
+		var x = d3.scaleBand().domain(counts.map(function(d) {
+			return d.year;
+		})).range([0, width]).padding(0.1);
+		// Create a scale for the y-axis
+		var y = d3.scaleLinear().domain([0, d3.max(counts, function(d) {
+			return d.count;
+		})]).range([height, 0]);
+		// Create the chart
+		var svg = d3.select("#chart").append("svg").attr("width", width + margin.left + margin.right).attr("height", height + margin.top + margin.bottom).append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+		// Create the x-axis
+		var xAxis = d3.axisBottom(x);
+		svg.append("g").attr("transform", "translate(0," + height + ")").call(xAxis);
+		// Create the y-axis
+		var yAxis = d3.axisLeft(y);
+		svg.append("g").call(yAxis);
+		// Add y-axis title
+		svg.append("text").attr("class", "axis-title").attr("transform", "rotate(-90)").attr("x", -height / 3).attr("y", -50).style("text-anchor", "end").text("Number Of Electric Cars");
+		// Add the bars to the chart
+		var bars = svg.selectAll(".bar").data(counts).enter().append("rect").attr("class", "bar").attr("x", function(d) {
+			return x(d.year);
+		}).attr("width", x.bandwidth()).attr("y", function(d) {
+			return y(d.count);
+		}).attr("height", function(d) {
+			return height - y(d.count);
+		}).attr("fill-opacity", function(d) {
+			// Set the fill-opacity of the 2023 bar to 0.5
+			return d.year === 2023 ? 0.5 : 1.0;
+		}).attr("fill", function(d) {
+			return d.year === 2023 ? "rgba(70, 130, 180, 0.5)" : "steelblue";
+		});
+		// Add a tooltip to the chart
+		var tooltip = d3.select("#chart").append("div").attr("class", "tooltip").style("display", "none");
+		// Add event listeners to show and hide the tooltip
+		bars.on("mouseover", function(event, d) {
+			d3.select(this).attr("fill", "orange");
+			tooltip.style("display", "block");
+			// Add a title to the tooltip for the 2023 bar
+			var tooltipTitle = d.year === 2023 ? "Predicted number: " : "";
+			tooltip.html(tooltipTitle + d.count).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 25) + "px");
+		}).on("mouseout", function(d) {
+			d3.select(this).attr("fill", function(d) {
+				return d.year === 2023 ? "rgba(70, 130, 180, 0.5)" : "steelblue";
+			});
+			tooltip.style("display", "none");
+		});
+
+		function generateWordCloud(data, year) {
+			// Filter the data to get cars for the given year
+			var yearData = data.filter(function(d) {
+				return d.ModelYear == year;
+			});
+			// Group the cars by maker and count the number of cars for each maker
+			var makerCounts = Array.from(d3.group(yearData, d => d.Maker), ([key, value]) => ({
+				maker: key,
+				count: value.length
+			}));
+			// Create a scale for the font size based on the number of cars
+			var fontSize = d3.scaleLinear().domain([0, d3.max(makerCounts, function(d) {
+				return d.count;
+			})]).range([18, 99]);
+			// Create the word cloud
+			d3.layout.cloud().size([1000, 650]).words(makerCounts.map(function(d) {
+				return {
+					text: d.maker,
+					size: fontSize(d.count)
+				};
+			})).padding(5).rotate(function() {
+				return ~~(Math.random() * 2) * 90;
+			}).font("Impact").fontSize(function(d) {
+				return d.size;
+			}).on("end", draw).start();
+			// Add a tooltip to the word cloud
+			var tooltip = d3.select("#wordcloud").append("div").attr("class", "tooltip").style("display", "none");
+			// Draw the word cloud
+			function draw(words) {
+				d3.select("#wordcloud").selectAll("*").remove();
+				var svg = d3.select("#wordcloud").append("svg").attr("width", 1000).attr("height", 650).append("g").attr("transform", "translate(400,250)");
+				var tooltip = d3.select("#wordcloud").append("div").attr("class", "tooltip").style("display", "none").text("Click for more information");
+				var cloud = svg.selectAll("text").data(words).enter().append("text").style("font-size", function(d) {
+					return d.size + "px";
+				}).style("font-family", "Impact").style("fill", function(d, i) {
+					return d3.schemeCategory10[i % 10];
+				}).attr("text-anchor", "middle").attr("transform", function(d) {
+					return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
+				}).text(function(d) {
+					return d.text;
+				});
+				cloud.on("click", function(event, d) {
+					var maker = d.text;
+					showLineChart(data, maker);
+				}).on("mouseover", function(event, d) {
+					tooltip.style("display", "block").style("display", "block").style("left", (event.pageX - wordCloudContainer.node().offsetLeft + 10) + "px").style("top", (event.pageY - wordCloudContainer.node().offsetTop - 25) + "px");
+				}).on("mouseout", function(d) {
+					tooltip.style("display", "none");
+				});
+			}
+			var wordCloudContainer = d3.select("#wordcloud").style("position", "relative").style("padding-top", "50px");
+			if(year !== 2023) {
+				var wordCloudTitle = wordCloudContainer.append("h2").attr("class", "wordcloud-title").style("text-align", "center").style("position", "absolute").style("top", "0").style("left", "50%").style("transform", "translateX(-50%)").text("Popularity of manufacturers in " + year);
+			} else {
+				wordCloudContainer.style("padding-top", "0");
+			}
+		}
+		bars.on("click", function(event, d) {
+			generateWordCloud(data, d.year);
+		});
+
+		function showLineChart(data, maker) {
+			// Filter the data for the selected maker
+			var makerData = data.filter(function(d) {
+				return d.Maker === maker;
+			});
+			// Group the data by year and count the number of cars for each year
+			var makerCounts = Array.from(d3.group(makerData, d => d.ModelYear), ([key, value]) => ({
+				year: key,
+				count: value.length
+			})).sort((a, b) => a.year - b.year);
+			// Set up the dimensions of the chart
+			var chartMargin = {
+				top: 20,
+				right: 20,
+				bottom: 30,
+				left: 100
+			};
+			var chartWidth = 1000 - chartMargin.left - chartMargin.right;
+			var chartHeight = 650 - chartMargin.top - chartMargin.bottom;
+			// Create scales for x and y axes
+			var xScale = d3.scaleBand().domain(makerCounts.map(function(d) {
+				return d.year;
+			})).range([0, chartWidth]).padding(1);
+			var yScale = d3.scaleLinear().domain([0, d3.max(makerCounts, function(d) {
+				return d.count;
+			})]).range([chartHeight, 0]);
+			// Create the chart SVG element
+			var chartSvg = d3.select("#line-chart").selectAll("svg").remove().exit().data([makerCounts]).enter().append("svg").attr("width", chartWidth + chartMargin.left + chartMargin.right).attr("height", chartHeight + chartMargin.top + chartMargin.bottom).append("g").attr("transform", "translate(" + chartMargin.left + "," + chartMargin.top + ")");
+			// Create x-axis
+			var xAxis = d3.axisBottom(xScale);
+			chartSvg.append("g").attr("transform", "translate(0," + chartHeight + ")").call(xAxis);
+			// Create y-axis
+			var yAxis = d3.axisLeft(yScale);
+			chartSvg.append("g").call(yAxis);
+			// Add y-axis title
+			chartSvg.append("text").attr("class", "axis-title").attr("transform", "rotate(-90)").attr("x", -height / 3).attr("y", -50).style("text-anchor", "end").text("Number Of Electric Cars");
+			// Create the line generator
+			var line = d3.line().x(function(d) {
+				return xScale(d.year);
+			}).y(function(d) {
+				return yScale(d.count);
+			});
+			// Draw the line
+			chartSvg.append("path").datum(makerCounts).attr("class", "line").attr("fill", "none").attr("stroke", "steelblue").attr("stroke-width", 2).attr("d", line);
+			// Create the tooltip element
+			var lineTooltip = d3.select("#line-chart").append("div").attr("class", "tooltip").style("display", "none");
+			// Add dots to the line chart
+			chartSvg.selectAll(".dot").data(makerCounts).enter().append("circle").attr("class", "dot").attr("cx", function(d) {
+				return xScale(d.year);
+			}).attr("cy", function(d) {
+				return yScale(d.count);
+			}).attr("r", 5).attr("fill", "steelblue").on("mouseover", function(event, d) {
+				d3.select(this).attr("fill", "orange");
+				lineTooltip.style("display", "block").html("Year: " + d.year + "<br/>Count: " + d.count).style("left", (event.pageX + 10) + "px").style("top", (event.pageY - 25) + "px");
+			}).on("mouseout", function(d) {
+				d3.select(this).attr("fill", "steelblue");
+				lineTooltip.style("display", "none");
+			});
+			// Remove the transparent rectangles
+			chartSvg.selectAll("rect").remove();
+			// Add a title to the chart
+			chartSvg.append("text").attr("x", (chartWidth / 2)).attr("y", 0 - (chartMargin.top / 2)).attr("text-anchor", "middle").style("font-size", "14px").text("Number of Electric Vehicles by Year for " + maker);
+		}
+	});
+	// Hide the floating page
+	function hideFloatingPage() {
+		document.getElementById("floating-page").style.display = "none";
+	}
+	// Add an event listener to the close button to hide the floating page
+	document.getElementById("close-button").addEventListener("click", hideFloatingPage);
+	</script>
+</body>
+
+</html>
